@@ -323,6 +323,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create seller product
+  app.post("/api/seller/products", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSeller) {
+        return res.status(403).json({ message: "Not a seller" });
+      }
+
+      const { certificationIds, ...productData } = req.body;
+      
+      // Generate slug from name
+      const slug = productData.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36);
+
+      const product = await storage.createProduct(
+        {
+          ...productData,
+          sellerId: userId,
+          slug,
+        },
+        certificationIds
+      );
+      res.status(201).json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Update seller product
+  app.patch("/api/seller/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSeller) {
+        return res.status(403).json({ message: "Not a seller" });
+      }
+
+      const existingProduct = await storage.getProduct(req.params.id);
+      if (!existingProduct || existingProduct.sellerId !== userId) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      const product = await storage.updateProduct(req.params.id, req.body);
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Delete seller product
+  app.delete("/api/seller/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSeller) {
+        return res.status(403).json({ message: "Not a seller" });
+      }
+
+      const existingProduct = await storage.getProduct(req.params.id);
+      if (!existingProduct || existingProduct.sellerId !== userId) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+
+      await storage.deleteProduct(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Seller verification application
+  app.post("/api/seller/verification/apply", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.claims?.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.isSeller) {
+        return res.status(403).json({ message: "Not a seller" });
+      }
+
+      if (user.sellerVerified) {
+        return res.status(400).json({ message: "Already verified" });
+      }
+
+      const { businessName, businessDescription } = req.body;
+
+      // Update seller info and mark as verified (in production, this would be a pending state)
+      // For demo purposes, we auto-approve after submission
+      await storage.updateUser(userId, {
+        sellerName: businessName || user.sellerName,
+        sellerDescription: businessDescription || user.sellerDescription,
+        sellerVerified: true,
+      });
+
+      res.json({ message: "Verification application submitted successfully", verified: true });
+    } catch (error) {
+      console.error("Error submitting verification:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Stripe Payment
   app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {
     try {

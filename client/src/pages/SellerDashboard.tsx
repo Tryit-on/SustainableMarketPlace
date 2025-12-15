@@ -14,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ProductFormDialog } from "@/components/ProductFormDialog";
+import { SellerVerificationCard } from "@/components/SellerVerificationCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -107,10 +109,7 @@ export default function SellerDashboard() {
                 Welcome back, {user.sellerName || user.firstName}!
               </p>
             </div>
-            <Button className="gap-2" data-testid="button-add-product">
-              <Plus className="h-4 w-4" />
-              Add New Product
-            </Button>
+            <ProductFormDialog />
           </div>
 
           {/* Stats */}
@@ -249,10 +248,14 @@ export default function SellerDashboard() {
                     <div className="text-center py-8">
                       <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                       <p className="text-muted-foreground mb-4">No products yet</p>
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Your First Product
-                      </Button>
+                      <ProductFormDialog 
+                        trigger={
+                          <Button>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Your First Product
+                          </Button>
+                        }
+                      />
                     </div>
                   )}
                 </CardContent>
@@ -261,6 +264,9 @@ export default function SellerDashboard() {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Verification Status */}
+              <SellerVerificationCard user={user} />
+
               {/* Recent Orders */}
               <Card>
                 <CardHeader>
