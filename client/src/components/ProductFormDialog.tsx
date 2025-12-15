@@ -103,12 +103,12 @@ export function ProductFormDialog({ product, trigger, onSuccess }: ProductFormDi
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
-        price: data.price,
-        originalPrice: data.originalPrice || null,
+        price: parseFloat(data.price).toFixed(2),
+        originalPrice: data.originalPrice ? parseFloat(data.originalPrice).toFixed(2) : null,
         imageUrl: data.imageUrl || null,
         sustainabilityScore: parseInt(data.sustainabilityScore) || 70,
         materials: data.materials || null,
-        carbonFootprint: data.carbonFootprint || null,
+        carbonFootprint: data.carbonFootprint ? parseFloat(data.carbonFootprint).toFixed(2) : null,
         lifecycle: data.lifecycle || null,
         stockQuantity: parseInt(data.stockQuantity) || 0,
         inStock: parseInt(data.stockQuantity) > 0,
@@ -123,8 +123,23 @@ export function ProductFormDialog({ product, trigger, onSuccess }: ProductFormDi
         title: "Product created",
         description: "Your product has been added to the marketplace.",
       });
-      form.reset();
       setOpen(false);
+      setTimeout(() => {
+        form.reset({
+          name: "",
+          description: "",
+          categoryId: "",
+          price: "",
+          originalPrice: "",
+          imageUrl: "",
+          sustainabilityScore: "70",
+          materials: "",
+          carbonFootprint: "",
+          lifecycle: "",
+          stockQuantity: "100",
+          certificationIds: [],
+        });
+      }, 300);
       onSuccess?.();
     },
     onError: () => {
@@ -142,12 +157,12 @@ export function ProductFormDialog({ product, trigger, onSuccess }: ProductFormDi
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
-        price: data.price,
-        originalPrice: data.originalPrice || null,
+        price: parseFloat(data.price).toFixed(2),
+        originalPrice: data.originalPrice ? parseFloat(data.originalPrice).toFixed(2) : null,
         imageUrl: data.imageUrl || null,
         sustainabilityScore: parseInt(data.sustainabilityScore) || 70,
         materials: data.materials || null,
-        carbonFootprint: data.carbonFootprint || null,
+        carbonFootprint: data.carbonFootprint ? parseFloat(data.carbonFootprint).toFixed(2) : null,
         lifecycle: data.lifecycle || null,
         stockQuantity: parseInt(data.stockQuantity) || 0,
         inStock: parseInt(data.stockQuantity) > 0,

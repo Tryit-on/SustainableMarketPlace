@@ -5,6 +5,7 @@ import { ProductCard, ProductCardSkeleton } from "@/components/ProductCard";
 import { SustainabilityScore } from "@/components/SustainabilityScore";
 import { CertificationBadges } from "@/components/CertificationBadge";
 import { StarRating } from "@/components/StarRating";
+import { SocialShareButtons } from "@/components/SocialShareButtons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -395,9 +396,12 @@ export default function ProductDetail() {
                   >
                     <Heart className="h-5 w-5" />
                   </Button>
-                  <Button size="lg" variant="outline" data-testid="button-share">
-                    <Share2 className="h-5 w-5" />
-                  </Button>
+                  <SocialShareButtons 
+                    title={product.name}
+                    description={product.description || "Check out this sustainable product on GreenMart!"}
+                    imageUrl={product.imageUrl || undefined}
+                    compact 
+                  />
                 </div>
               </div>
 
