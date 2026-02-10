@@ -8,28 +8,28 @@ import { useToast } from "@/hooks/use-toast";
 const footerLinks = {
   about: [
     { label: "Our Mission", href: "/about" },
-    { label: "Sustainability Promise", href: "/about#sustainability" },
-    { label: "Meet the Team", href: "/about#team" },
-    { label: "Careers", href: "/careers" },
+    { label: "Sustainability Promise", href: "/about" },
+    { label: "Meet the Team", href: "/about" },
+    { label: "Become a Seller", href: "/about" },
   ],
   shop: [
     { label: "All Products", href: "/shop" },
-    { label: "Sustainable Fashion", href: "/shop?category=fashion" },
-    { label: "Organic Food", href: "/shop?category=food" },
-    { label: "Eco Home", href: "/shop?category=home" },
-    { label: "Green Beauty", href: "/shop?category=beauty" },
+    { label: "Sustainable Fashion", href: "/shop?category=sustainable-fashion" },
+    { label: "Organic Food", href: "/shop?category=organic-food" },
+    { label: "Eco Home", href: "/shop?category=eco-home" },
+    { label: "Green Beauty", href: "/shop?category=green-beauty" },
   ],
   community: [
     { label: "Blog", href: "/community" },
-    { label: "Eco Challenges", href: "/challenges" },
-    { label: "Success Stories", href: "/community?type=stories" },
-    { label: "Become a Seller", href: "/become-seller" },
+    { label: "Eco Challenges", href: "/community" },
+    { label: "Success Stories", href: "/community" },
+    { label: "Become a Seller", href: "/about" },
   ],
   support: [
-    { label: "FAQ", href: "/faq" },
-    { label: "Contact Us", href: "/contact" },
-    { label: "Shipping Info", href: "/shipping" },
-    { label: "Returns Policy", href: "/returns" },
+    { label: "FAQ", href: "/about" },
+    { label: "Contact Us", href: "/about" },
+    { label: "Shipping Info", href: "/about" },
+    { label: "Returns Policy", href: "/about" },
   ],
 };
 
@@ -179,8 +179,8 @@ export function Footer() {
           <div className="text-center text-sm text-muted-foreground">
             <p>&copy; {new Date().getFullYear()} GreenMart. All rights reserved.</p>
             <div className="flex justify-center gap-4 mt-2">
-              <Link href="/privacy" className="hover:text-foreground">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-foreground">Terms of Service</Link>
+              <Link href="/about" className="hover:text-foreground">Privacy Policy</Link>
+              <Link href="/about" className="hover:text-foreground">Terms of Service</Link>
             </div>
           </div>
         </div>

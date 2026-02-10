@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -49,6 +49,16 @@ export default function Shop() {
   const [sortBy, setSortBy] = useState(params.get("sort") || "featured");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(searchParams);
+    const urlCategory = urlParams.get("category") || "";
+    const urlSearch = urlParams.get("search") || "";
+    const urlSort = urlParams.get("sort") || "featured";
+    if (urlCategory !== selectedCategory) setSelectedCategory(urlCategory);
+    if (urlSearch !== searchQuery) setSearchQuery(urlSearch);
+    if (urlSort !== sortBy) setSortBy(urlSort);
+  }, [searchParams]);
 
   const { data: products, isLoading: productsLoading } = useQuery<ProductWithDetails[]>({
     queryKey: ["/api/products"],
