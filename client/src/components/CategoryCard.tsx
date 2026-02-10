@@ -17,9 +17,13 @@ interface CategoryCardProps {
 }
 
 const categoryIcons: Record<string, typeof Shirt> = {
+  "sustainable-fashion": Shirt,
   "fashion": Shirt,
+  "organic-food": Apple,
   "food": Apple,
+  "eco-home": Home,
   "home": Home,
+  "green-beauty": Sparkles,
   "beauty": Sparkles,
   "zero-waste": Recycle,
   "fair-trade": Globe2,
@@ -28,9 +32,13 @@ const categoryIcons: Record<string, typeof Shirt> = {
 };
 
 const categoryGradients: Record<string, string> = {
+  "sustainable-fashion": "from-violet-500/20 to-purple-500/20",
   "fashion": "from-violet-500/20 to-purple-500/20",
+  "organic-food": "from-green-500/20 to-emerald-500/20",
   "food": "from-green-500/20 to-emerald-500/20",
+  "eco-home": "from-amber-500/20 to-orange-500/20",
   "home": "from-amber-500/20 to-orange-500/20",
+  "green-beauty": "from-pink-500/20 to-rose-500/20",
   "beauty": "from-pink-500/20 to-rose-500/20",
   "zero-waste": "from-teal-500/20 to-cyan-500/20",
   "fair-trade": "from-blue-500/20 to-indigo-500/20",
@@ -46,19 +54,9 @@ export function CategoryCard({ category }: CategoryCardProps) {
     <Link href={`/shop?category=${category.slug}`}>
       <Card className="group overflow-hidden hover-elevate cursor-pointer h-full" data-testid={`card-category-${category.slug}`}>
         <CardContent className={`p-6 flex flex-col items-center justify-center text-center h-full bg-gradient-to-br ${gradient}`}>
-          {category.imageUrl ? (
-            <div className="w-16 h-16 rounded-full overflow-hidden mb-4 border-2 border-background">
-              <img
-                src={category.imageUrl}
-                alt={category.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-background/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Icon className="h-8 w-8 text-foreground/70" />
-            </div>
-          )}
+          <div className="w-16 h-16 rounded-full bg-background/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Icon className="h-8 w-8 text-foreground/70" />
+          </div>
           <h3 className="font-semibold text-sm mb-1" data-testid={`text-category-name-${category.slug}`}>
             {category.name}
           </h3>
