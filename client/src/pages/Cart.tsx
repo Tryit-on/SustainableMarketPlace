@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -16,19 +16,13 @@ import { useEffect } from "react";
 export default function Cart() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
+      setLocation("/login");
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading, setLocation]);
 
   const { data: cartItems, isLoading } = useQuery<CartItemWithProduct[]>({
     queryKey: ["/api/cart"],
@@ -75,9 +69,8 @@ export default function Cart() {
     return sum + parseFloat(item.product.price) * item.quantity;
   }, 0) || 0;
 
-  const shipping = subtotal > 50 ? 0 : 5.99;
-  const carbonOffset = 1.00;
-  const total = subtotal + shipping + carbonOffset;
+  const shipping = subtotal > 40 ? 0 : 4.99;
+  const total = subtotal + shipping;
 
   if (authLoading || !isAuthenticated) {
     return (
@@ -174,7 +167,7 @@ export default function Cart() {
                           </div>
 
                           <p className="text-sm text-muted-foreground mb-3">
-                            ${parseFloat(item.product.price).toFixed(2)} each
+                            £{parseFloat(item.product.price).toFixed(2)} each
                           </p>
 
                           <div className="flex items-center justify-between">
@@ -213,7 +206,7 @@ export default function Cart() {
                             </div>
 
                             <p className="font-semibold" data-testid={`text-cart-item-total-${item.id}`}>
-                              ${(parseFloat(item.product.price) * item.quantity).toFixed(2)}
+                              £{(parseFloat(item.product.price) * item.quantity).toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -232,7 +225,7 @@ export default function Cart() {
                   <CardContent className="space-y-4">
                     <div className="flex justify-between text-sm">
                       <span>Subtotal ({cartItems.length} items)</span>
-                      <span>${subtotal.toFixed(2)}</span>
+                      <span>£{subtotal.toFixed(2)}</span>
                     </div>
 
                     <div className="flex justify-between text-sm">
@@ -241,22 +234,14 @@ export default function Cart() {
                         {shipping === 0 ? (
                           <span className="text-green-600 dark:text-green-400">Free</span>
                         ) : (
-                          `$${shipping.toFixed(2)}`
+                          `£${shipping.toFixed(2)}`
                         )}
                       </span>
                     </div>
 
-                    <div className="flex justify-between text-sm">
-                      <span className="flex items-center gap-1">
-                        <Leaf className="h-4 w-4 text-primary" />
-                        Carbon Offset
-                      </span>
-                      <span>${carbonOffset.toFixed(2)}</span>
-                    </div>
-
-                    {subtotal < 50 && (
+                    {subtotal < 40 && (
                       <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
-                        Add ${(50 - subtotal).toFixed(2)} more for free shipping!
+                        Add £{(40 - subtotal).toFixed(2)} more for free shipping!
                       </p>
                     )}
 
@@ -264,7 +249,7 @@ export default function Cart() {
 
                     <div className="flex justify-between font-semibold">
                       <span>Total</span>
-                      <span data-testid="text-cart-total">${total.toFixed(2)}</span>
+                      <span data-testid="text-cart-total">£{total.toFixed(2)}</span>
                     </div>
                   </CardContent>
                   <CardFooter className="flex-col gap-3">
@@ -280,20 +265,13 @@ export default function Cart() {
                   </CardFooter>
                 </Card>
 
-                {/* Eco Impact */}
-                <Card className="mt-4 bg-primary/5 border-primary/20">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <Leaf className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Your Eco Impact</p>
-                        <p className="text-xs text-muted-foreground">
-                          This order will save ~2.5kg CO2
-                        </p>
-                      </div>
-                    </div>
+                {/* Eco note */}
+                <Card className="mt-4 bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                  <CardContent className="p-4 flex items-start gap-3">
+                    <Leaf className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground">
+                      All sellers on GreenMart are document-verified. Proceed to checkout to complete your order.
+                    </p>
                   </CardContent>
                 </Card>
               </div>

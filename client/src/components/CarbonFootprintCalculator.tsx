@@ -1,18 +1,9 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Leaf, 
-  Truck, 
-  Plane, 
-  Ship,
-  TreePine,
-  Info
-} from "lucide-react";
+import { Leaf, Truck, Plane, Ship, Info } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -68,54 +59,50 @@ const shippingOptions: ShippingOption[] = [
   },
 ];
 
-const CARBON_OFFSET_COST_PER_KG = 0.05; // $0.05 per kg CO2
-
 interface CarbonFootprintCalculatorProps {
   productCarbonFootprint?: number;
-  onShippingSelect?: (option: ShippingOption, offsetCarbon: boolean) => void;
+  carbonFootprintMethod?: string | null;
+  onShippingSelect?: (option: ShippingOption) => void;
   compact?: boolean;
 }
 
-export function CarbonFootprintCalculator({ 
-  productCarbonFootprint = 0, 
+const getCarbonColor = (kg: number) => {
+  if (kg <= 1) return "text-green-600 dark:text-green-400";
+  if (kg <= 2) return "text-lime-600 dark:text-lime-400";
+  if (kg <= 3) return "text-yellow-600 dark:text-yellow-400";
+  return "text-orange-600 dark:text-orange-400";
+};
+
+export function CarbonFootprintCalculator({
+  productCarbonFootprint = 0,
+  carbonFootprintMethod,
   onShippingSelect,
-  compact = false
+  compact = false,
 }: CarbonFootprintCalculatorProps) {
   const [selectedShipping, setSelectedShipping] = useState(shippingOptions[0].id);
-  const [offsetCarbon, setOffsetCarbon] = useState(false);
 
-  const selectedOption = useMemo(() => 
-    shippingOptions.find(o => o.id === selectedShipping)!,
+  const selectedOption = useMemo(
+    () => shippingOptions.find((o) => o.id === selectedShipping)!,
     [selectedShipping]
   );
 
-  const totalCarbonKg = useMemo(() => 
-    productCarbonFootprint + selectedOption.carbonKg,
+  const totalCarbonKg = useMemo(
+    () => productCarbonFootprint + selectedOption.carbonKg,
     [productCarbonFootprint, selectedOption]
-  );
-
-  const offsetCost = useMemo(() => 
-    Math.max(0.50, totalCarbonKg * CARBON_OFFSET_COST_PER_KG).toFixed(2),
-    [totalCarbonKg]
   );
 
   const handleSelect = (shippingId: string) => {
     setSelectedShipping(shippingId);
-    const option = shippingOptions.find(o => o.id === shippingId)!;
-    onShippingSelect?.(option, offsetCarbon);
+    const option = shippingOptions.find((o) => o.id === shippingId)!;
+    onShippingSelect?.(option);
   };
 
-  const handleOffsetChange = (checked: boolean) => {
-    setOffsetCarbon(checked);
-    onShippingSelect?.(selectedOption, checked);
-  };
-
-  const getCarbonColor = (kg: number) => {
-    if (kg <= 1) return "text-green-600 dark:text-green-400";
-    if (kg <= 2) return "text-lime-600 dark:text-lime-400";
-    if (kg <= 3) return "text-yellow-600 dark:text-yellow-400";
-    return "text-orange-600 dark:text-orange-400";
-  };
+  const methodLabel =
+    carbonFootprintMethod === "lca_verified"
+      ? "LCA verified"
+      : carbonFootprintMethod === "category_default"
+      ? "Category average (ADEME 2024)"
+      : null;
 
   if (compact) {
     return (
@@ -127,7 +114,10 @@ export function CarbonFootprintCalculator({
               <Info className="h-4 w-4 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
-              <p className="text-sm">Choose eco-friendly shipping to reduce your carbon footprint</p>
+              <p className="text-sm">
+                CO₂ figures are estimates. Choose the greenest shipping to reduce your
+                footprint.
+              </p>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -138,8 +128,8 @@ export function CarbonFootprintCalculator({
               <div
                 key={option.id}
                 className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                  selectedShipping === option.id 
-                    ? "border-primary bg-primary/5" 
+                  selectedShipping === option.id
+                    ? "border-primary bg-primary/5"
                     : "border-border hover-elevate"
                 }`}
                 onClick={() => handleSelect(option.id)}
@@ -149,7 +139,10 @@ export function CarbonFootprintCalculator({
                   <div className="flex items-center gap-2">
                     <Icon className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <Label htmlFor={option.id} className="text-sm font-medium cursor-pointer">
+                      <Label
+                        htmlFor={option.id}
+                        className="text-sm font-medium cursor-pointer"
+                      >
                         {option.name}
                       </Label>
                       <p className="text-xs text-muted-foreground">{option.deliveryDays}</p>
@@ -158,37 +151,16 @@ export function CarbonFootprintCalculator({
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">
-                    {option.price === 0 ? "Free" : `$${option.price.toFixed(2)}`}
+                    {option.price === 0 ? "Free" : `£${option.price.toFixed(2)}`}
                   </p>
                   <p className={`text-xs ${getCarbonColor(option.carbonKg)}`}>
-                    {option.carbonKg}kg CO2
+                    {option.carbonKg}kg CO₂
                   </p>
                 </div>
               </div>
             );
           })}
         </RadioGroup>
-
-        <div className="flex items-center space-x-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
-          <Checkbox 
-            id="carbon-offset" 
-            checked={offsetCarbon} 
-            onCheckedChange={(checked) => handleOffsetChange(checked as boolean)}
-            data-testid="checkbox-carbon-offset"
-          />
-          <div className="flex-1">
-            <Label htmlFor="carbon-offset" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-              <TreePine className="h-4 w-4 text-primary" />
-              Offset carbon emissions
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Plant trees to offset {totalCarbonKg.toFixed(1)}kg CO2
-            </p>
-          </div>
-          <Badge variant="secondary" className="text-xs">
-            +${offsetCost}
-          </Badge>
-        </div>
       </div>
     );
   }
@@ -198,14 +170,19 @@ export function CarbonFootprintCalculator({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Leaf className="h-5 w-5 text-primary" />
-          Carbon Footprint Calculator
+          Carbon Footprint
         </CardTitle>
         <CardDescription>
-          Track and offset the environmental impact of your order
+          Estimated emissions for this order
+          {methodLabel && (
+            <span className="ml-1 text-xs text-muted-foreground">
+              — product figure from {methodLabel}
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Carbon Breakdown */}
+        {/* Carbon breakdown */}
         <div className="space-y-3">
           <h4 className="font-medium text-sm">Estimated Carbon Emissions</h4>
           <div className="grid grid-cols-2 gap-4">
@@ -218,7 +195,7 @@ export function CarbonFootprintCalculator({
                 <p className={`text-xl font-bold ${getCarbonColor(productCarbonFootprint)}`}>
                   {productCarbonFootprint.toFixed(1)} kg
                 </p>
-                <p className="text-xs text-muted-foreground">CO2 equivalent</p>
+                <p className="text-xs text-muted-foreground">CO₂ equivalent</p>
               </div>
             )}
             <div className="p-4 rounded-lg bg-muted">
@@ -229,30 +206,22 @@ export function CarbonFootprintCalculator({
               <p className={`text-xl font-bold ${getCarbonColor(selectedOption.carbonKg)}`}>
                 {selectedOption.carbonKg.toFixed(1)} kg
               </p>
-              <p className="text-xs text-muted-foreground">CO2 equivalent</p>
+              <p className="text-xs text-muted-foreground">CO₂ equivalent</p>
             </div>
           </div>
           <div className="p-4 rounded-lg border-2 border-dashed">
             <div className="flex justify-between items-center">
-              <span className="font-medium">Total Carbon Footprint</span>
-              <div className="text-right">
-                <p className={`text-2xl font-bold ${getCarbonColor(totalCarbonKg)}`}>
-                  {totalCarbonKg.toFixed(1)} kg CO2
-                </p>
-                {offsetCarbon && (
-                  <Badge className="bg-primary text-primary-foreground gap-1">
-                    <TreePine className="h-3 w-3" />
-                    Offset
-                  </Badge>
-                )}
-              </div>
+              <span className="font-medium">Total Estimate</span>
+              <p className={`text-2xl font-bold ${getCarbonColor(totalCarbonKg)}`}>
+                {totalCarbonKg.toFixed(1)} kg CO₂
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Shipping Options */}
+        {/* Shipping options */}
         <div className="space-y-3">
-          <h4 className="font-medium text-sm">Choose Shipping Method</h4>
+          <h4 className="font-medium text-sm">Shipping Method</h4>
           <RadioGroup value={selectedShipping} onValueChange={handleSelect}>
             <div className="grid gap-3">
               {shippingOptions.map((option) => {
@@ -262,8 +231,8 @@ export function CarbonFootprintCalculator({
                   <div
                     key={option.id}
                     className={`relative flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      isSelected 
-                        ? "border-primary bg-primary/5" 
+                      isSelected
+                        ? "border-primary bg-primary/5"
                         : "border-border hover-elevate"
                     }`}
                     onClick={() => handleSelect(option.id)}
@@ -275,7 +244,10 @@ export function CarbonFootprintCalculator({
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
-                        <Label htmlFor={`ship-${option.id}`} className="font-medium cursor-pointer">
+                        <Label
+                          htmlFor={`ship-${option.id}`}
+                          className="font-medium cursor-pointer"
+                        >
                           {option.name}
                         </Label>
                         <p className="text-sm text-muted-foreground">{option.description}</p>
@@ -284,10 +256,10 @@ export function CarbonFootprintCalculator({
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-lg">
-                        {option.price === 0 ? "Free" : `$${option.price.toFixed(2)}`}
+                        {option.price === 0 ? "Free" : `£${option.price.toFixed(2)}`}
                       </p>
                       <p className={`text-sm ${getCarbonColor(option.carbonKg)}`}>
-                        {option.carbonKg} kg CO2
+                        {option.carbonKg} kg CO₂
                       </p>
                     </div>
                     {option.id === "ground-eco" && (
@@ -302,50 +274,14 @@ export function CarbonFootprintCalculator({
           </RadioGroup>
         </div>
 
-        {/* Carbon Offset Option */}
-        <div className={`p-4 rounded-lg ${offsetCarbon ? 'bg-primary/10 border-2 border-primary' : 'bg-muted'}`}>
-          <div className="flex items-start gap-4">
-            <Checkbox 
-              id="offset-carbon" 
-              checked={offsetCarbon} 
-              onCheckedChange={(checked) => handleOffsetChange(checked as boolean)}
-              className="mt-1"
-              data-testid="checkbox-offset-full"
-            />
-            <div className="flex-1">
-              <Label htmlFor="offset-carbon" className="font-medium cursor-pointer flex items-center gap-2">
-                <TreePine className="h-5 w-5 text-primary" />
-                Make this order carbon neutral
-              </Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                We'll plant trees through our reforestation partners to offset {totalCarbonKg.toFixed(1)}kg of CO2 emissions from your order.
-              </p>
-              <div className="mt-3 flex items-center gap-4">
-                <Badge variant="secondary" className="gap-1">
-                  <TreePine className="h-3 w-3" />
-                  ~{Math.ceil(totalCarbonKg / 20)} trees planted
-                </Badge>
-                <span className="text-sm font-medium">Only +${offsetCost}</span>
-              </div>
-            </div>
-          </div>
+        {/* Honest offset note */}
+        <div className="p-4 rounded-lg bg-muted/60 border border-border">
+          <p className="text-sm text-muted-foreground">
+            <strong className="text-foreground">Carbon offset coming soon.</strong> We&apos;re
+            integrating with a verified partner (Gold Standard) before offering offsets. We
+            won&apos;t charge for offsets until the integration is real and auditable.
+          </p>
         </div>
-
-        {offsetCarbon && (
-          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-            <div className="flex items-start gap-3">
-              <Leaf className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-              <div>
-                <p className="font-medium text-green-800 dark:text-green-200">
-                  Thank you for going carbon neutral!
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                  Your contribution supports verified reforestation projects worldwide.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

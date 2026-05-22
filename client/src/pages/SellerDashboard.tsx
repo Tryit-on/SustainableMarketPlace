@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,7 @@ import { ProductFormDialog } from "@/components/ProductFormDialog";
 import { SellerVerificationCard } from "@/components/SellerVerificationCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { 
+import {
   Package, 
   DollarSign, 
   ShoppingBag, 
@@ -34,29 +33,22 @@ import type { Product, Order } from "@shared/schema";
 
 export default function SellerDashboard() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
+      setLocation("/login");
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading, setLocation]);
 
   const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ["/api/seller/products"],
-    enabled: isAuthenticated && user?.isSeller,
+    enabled: isAuthenticated && !!user?.isSeller,
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
     queryKey: ["/api/seller/orders"],
-    enabled: isAuthenticated && user?.isSeller,
+    enabled: isAuthenticated && !!user?.isSeller,
   });
 
   if (authLoading || !isAuthenticated) {

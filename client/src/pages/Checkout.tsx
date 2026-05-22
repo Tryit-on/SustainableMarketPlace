@@ -14,13 +14,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Truck, Leaf, Lock, Check } from "lucide-react";
+import { ArrowLeft, Leaf, Lock } from "lucide-react";
 import type { CartItemWithProduct } from "@shared/schema";
 
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error("Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY");
-}
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY
+  ? loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY)
+  : null;
 
 function CheckoutForm({ total, onSuccess }: { total: number; onSuccess: () => void }) {
   const stripe = useStripe();
@@ -79,7 +78,7 @@ function CheckoutForm({ total, onSuccess }: { total: number; onSuccess: () => vo
         ) : (
           <>
             <Lock className="mr-2 h-4 w-4" />
-            Pay ${total.toFixed(2)}
+            Pay £{total.toFixed(2)}
           </>
         )}
       </Button>
@@ -96,16 +95,9 @@ export default function Checkout() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
+      setLocation("/login");
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading, setLocation]);
 
   const { data: cartItems, isLoading: cartLoading } = useQuery<CartItemWithProduct[]>({
     queryKey: ["/api/cart"],
@@ -117,14 +109,12 @@ export default function Checkout() {
   }, 0) || 0;
 
   const shippingCosts = {
-    standard: subtotal > 50 ? 0 : 5.99,
-    express: 12.99,
-    green: subtotal > 50 ? 2.99 : 8.99,
+    standard: subtotal > 40 ? 0 : 4.99,
+    express: 9.99,
   };
 
-  const shipping = shippingCosts[shippingOption as keyof typeof shippingCosts];
-  const carbonOffset = 1.00;
-  const total = subtotal + shipping + carbonOffset;
+  const shipping = shippingCosts[shippingOption as keyof typeof shippingCosts] ?? 4.99;
+  const total = subtotal + shipping;
 
   useEffect(() => {
     if (isAuthenticated && cartItems && cartItems.length > 0 && !clientSecret) {
@@ -266,11 +256,11 @@ export default function Checkout() {
                           <Label htmlFor="standard" className="font-medium cursor-pointer">
                             Standard Shipping
                           </Label>
-                          <p className="text-sm text-muted-foreground">5-7 business days</p>
+                          <p className="text-sm text-muted-foreground">3–5 business days · ~0.8 kg CO₂e</p>
                         </div>
                       </div>
                       <span className="font-medium">
-                        {shippingCosts.standard === 0 ? "Free" : `$${shippingCosts.standard.toFixed(2)}`}
+                        {shippingCosts.standard === 0 ? "Free" : `£${shippingCosts.standard.toFixed(2)}`}
                       </span>
                     </div>
 
@@ -281,24 +271,10 @@ export default function Checkout() {
                           <Label htmlFor="express" className="font-medium cursor-pointer">
                             Express Shipping
                           </Label>
-                          <p className="text-sm text-muted-foreground">2-3 business days</p>
+                          <p className="text-sm text-muted-foreground">1–2 business days · ~1.6 kg CO₂e</p>
                         </div>
                       </div>
-                      <span className="font-medium">${shippingCosts.express.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 border border-primary/50 rounded-lg cursor-pointer bg-primary/5">
-                      <div className="flex items-center gap-3">
-                        <RadioGroupItem value="green" id="green" />
-                        <div>
-                          <Label htmlFor="green" className="font-medium cursor-pointer flex items-center gap-2">
-                            <Leaf className="h-4 w-4 text-primary" />
-                            Carbon-Neutral Shipping
-                          </Label>
-                          <p className="text-sm text-muted-foreground">5-7 days, 100% offset</p>
-                        </div>
-                      </div>
-                      <span className="font-medium">${shippingCosts.green.toFixed(2)}</span>
+                      <span className="font-medium">£{shippingCosts.express.toFixed(2)}</span>
                     </div>
                   </RadioGroup>
                 </CardContent>
@@ -353,7 +329,7 @@ export default function Checkout() {
                           <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                         </div>
                         <p className="text-sm font-medium shrink-0">
-                          ${(parseFloat(item.product.price) * item.quantity).toFixed(2)}
+                          £{(parseFloat(item.product.price) * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     ))}
@@ -365,7 +341,7 @@ export default function Checkout() {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
-                      <span>${subtotal.toFixed(2)}</span>
+                      <span>£{subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Shipping</span>
@@ -373,16 +349,9 @@ export default function Checkout() {
                         {shipping === 0 ? (
                           <span className="text-green-600">Free</span>
                         ) : (
-                          `$${shipping.toFixed(2)}`
+                          `£${shipping.toFixed(2)}`
                         )}
                       </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="flex items-center gap-1">
-                        <Leaf className="h-3 w-3 text-primary" />
-                        Carbon Offset
-                      </span>
-                      <span>${carbonOffset.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -390,32 +359,19 @@ export default function Checkout() {
 
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>£{total.toFixed(2)}</span>
                   </div>
 
-                  {/* Eco Impact */}
-                  <Card className="bg-primary/5 border-primary/20">
+                  {/* Honest sustainability note */}
+                  <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
                     <CardContent className="p-4">
-                      <p className="text-sm font-medium flex items-center gap-2 mb-2">
-                        <Leaf className="h-4 w-4 text-primary" />
-                        Your Eco Impact
+                      <p className="text-sm font-medium flex items-center gap-2 mb-1">
+                        <Leaf className="h-4 w-4 text-emerald-600" />
+                        All sellers on GreenMart are verified
                       </p>
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Check className="h-3 w-3 text-primary" />
-                          <span>2.5kg CO2 saved compared to conventional products</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Check className="h-3 w-3 text-primary" />
-                          <span>Supporting verified sustainable sellers</span>
-                        </div>
-                        {shippingOption === "green" && (
-                          <div className="flex items-center gap-2">
-                            <Check className="h-3 w-3 text-primary" />
-                            <span>100% carbon-neutral delivery</span>
-                          </div>
-                        )}
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Every product in your cart is from a seller we've reviewed. Carbon offset integration coming soon.
+                      </p>
                     </CardContent>
                   </Card>
                 </CardContent>

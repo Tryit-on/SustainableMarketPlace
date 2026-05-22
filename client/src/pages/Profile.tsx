@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  User, 
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  User,
   Package, 
   Heart, 
   Settings, 
@@ -26,20 +26,23 @@ import type { Order, WishlistItem } from "@shared/schema";
 
 export default function Profile() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
+      setLocation("/login");
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading, setLocation]);
+
+  async function handleLogout() {
+    try {
+      await apiRequest("POST", "/api/logout");
+      queryClient.clear();
+      setLocation("/");
+    } catch {
+      setLocation("/");
+    }
+  }
 
   const { data: orders } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
@@ -154,8 +157,8 @@ export default function Profile() {
 
                   <Separator className="my-6" />
 
-                  <Button variant="outline" className="w-full" asChild>
-                    <a href="/api/logout">Log Out</a>
+                  <Button variant="outline" className="w-full" onClick={handleLogout}>
+                    Log Out
                   </Button>
                 </CardContent>
               </Card>

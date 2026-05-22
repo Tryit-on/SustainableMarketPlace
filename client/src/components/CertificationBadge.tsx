@@ -1,97 +1,121 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Leaf, 
-  Heart, 
-  Recycle, 
-  Globe2, 
-  TreePine, 
-  Sparkles,
-  ShieldCheck,
-  Ban
-} from "lucide-react";
-import type { Certification } from "@shared/schema";
+import { ShieldCheck, ShieldX } from "lucide-react";
+import type { CertificationBody, SellerCertification } from "@shared/schema";
 
 interface CertificationBadgeProps {
-  certification: Certification;
-  showLabel?: boolean;
+  certificationBody: CertificationBody;
+  sellerCertification: SellerCertification;
+  size?: "sm" | "md";
 }
 
-const certificationIcons: Record<string, typeof Leaf> = {
-  "fair-trade": Globe2,
-  "organic": Leaf,
-  "vegan": Heart,
-  "cruelty-free": Ban,
-  "carbon-neutral": TreePine,
-  "recycled": Recycle,
-  "eco-friendly": Sparkles,
-  "verified": ShieldCheck,
-};
+// Only renders when backed by a real sellerCertification record.
+// Shows expired state visually rather than silently hiding.
+export function CertificationBadge({
+  certificationBody,
+  sellerCertification,
+  size = "md",
+}: CertificationBadgeProps) {
+  const isExpired =
+    sellerCertification.validUntil != null &&
+    new Date(sellerCertification.validUntil as any) < new Date();
 
-const certificationColors: Record<string, string> = {
-  "fair-trade": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  "organic": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  "vegan": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  "cruelty-free": "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300",
-  "carbon-neutral": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-  "recycled": "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
-  "eco-friendly": "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300",
-  "verified": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-};
+  const verifiedDate = sellerCertification.verifiedAt
+    ? new Date(sellerCertification.verifiedAt as any).toLocaleDateString("en-GB", {
+        day: "numeric", month: "short", year: "numeric",
+      })
+    : null;
 
-export function CertificationBadge({ certification, showLabel = false }: CertificationBadgeProps) {
-  const Icon = certificationIcons[certification.slug] || Leaf;
-  const colorClass = certificationColors[certification.slug] || "bg-muted text-muted-foreground";
+  const validUntil = sellerCertification.validUntil
+    ? new Date(sellerCertification.validUntil as any).toLocaleDateString("en-GB", {
+        day: "numeric", month: "short", year: "numeric",
+      })
+    : null;
+
+  const tooltipText = isExpired
+    ? `${certificationBody.name} — Verification expired${validUntil ? ` on ${validUntil}` : ""}`
+    : [
+        certificationBody.name,
+        verifiedDate ? `Verified ${verifiedDate}` : null,
+        validUntil ? `Valid until ${validUntil}` : null,
+      ].filter(Boolean).join(" · ");
+
+  const sizeClass = size === "sm" ? "text-xs px-2 py-0.5" : "text-sm px-2.5 py-1";
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge 
-          variant="outline" 
-          className={`${colorClass} border-0 gap-1 cursor-help no-default-active-elevate`}
-          data-testid={`badge-certification-${certification.slug}`}
+        <Badge
+          variant="outline"
+          className={`${sizeClass} gap-1 cursor-default ${
+            isExpired
+              ? "opacity-50 border-dashed border-muted-foreground text-muted-foreground"
+              : "bg-green-50 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800"
+          }`}
+          data-testid={`badge-cert-${certificationBody.slug}`}
         >
-          <Icon className="h-3 w-3" />
-          {showLabel && <span className="text-xs">{certification.name}</span>}
+          {isExpired
+            ? <ShieldX className="h-3 w-3" />
+            : <ShieldCheck className="h-3 w-3" />
+          }
+          {certificationBody.name}
+          {isExpired && " (expired)"}
         </Badge>
       </TooltipTrigger>
       <TooltipContent>
-        <p className="font-medium">{certification.name}</p>
-        {certification.description && (
-          <p className="text-xs text-muted-foreground max-w-xs">{certification.description}</p>
+        <p className="text-sm max-w-xs">{tooltipText}</p>
+        {certificationBody.verificationUrl && !isExpired && (
+          <a
+            href={certificationBody.verificationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary underline mt-1 block"
+          >
+            Verify on {certificationBody.name} website ↗
+          </a>
         )}
       </TooltipContent>
     </Tooltip>
   );
 }
 
-export function CertificationBadges({ 
-  certifications, 
-  max = 4, 
-  showLabel = false 
-}: { 
-  certifications: Certification[]; 
+// List wrapper — only renders badges backed by active sellerCertification rows
+export function CertificationBadgeList({
+  certifications,
+  sellerCertifications,
+  size = "md",
+  max,
+}: {
+  certifications: CertificationBody[];
+  sellerCertifications: SellerCertification[];
+  size?: "sm" | "md";
   max?: number;
-  showLabel?: boolean;
 }) {
-  const visibleCerts = certifications.slice(0, max);
-  const remaining = certifications.length - max;
+  if (!certifications?.length) return null;
+
+  const pairedCerts = certifications
+    .map((cert) => ({
+      cert,
+      sc: sellerCertifications.find((sc) => sc.certificationBodyId === cert.id),
+    }))
+    .filter((pair): pair is { cert: CertificationBody; sc: SellerCertification } => pair.sc != null);
+
+  const visible = max ? pairedCerts.slice(0, max) : pairedCerts;
+  const remaining = max ? pairedCerts.length - max : 0;
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {visibleCerts.map((cert) => (
-        <CertificationBadge key={cert.id} certification={cert} showLabel={showLabel} />
+    <div className="flex flex-wrap gap-1.5">
+      {visible.map(({ cert, sc }) => (
+        <CertificationBadge key={cert.id} certificationBody={cert} sellerCertification={sc} size={size} />
       ))}
       {remaining > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="secondary" className="text-xs cursor-help no-default-active-elevate">
-              +{remaining}
-            </Badge>
+            <Badge variant="secondary" className="text-xs cursor-default">+{remaining}</Badge>
           </TooltipTrigger>
           <TooltipContent>
             <div className="space-y-1">
-              {certifications.slice(max).map((cert) => (
+              {pairedCerts.slice(max!).map(({ cert }) => (
                 <p key={cert.id} className="text-sm">{cert.name}</p>
               ))}
             </div>

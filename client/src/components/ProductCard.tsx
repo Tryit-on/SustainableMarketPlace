@@ -1,10 +1,10 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Heart, ShoppingCart, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SustainabilityScore } from "./SustainabilityScore";
-import { CertificationBadges } from "./CertificationBadge";
+import { CertificationBadge } from "./CertificationBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -19,6 +19,7 @@ interface ProductCardProps {
 export function ProductCard({ product }: ProductCardProps) {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isHovered, setIsHovered] = useState(false);
 
   const addToCartMutation = useMutation({
@@ -65,7 +66,7 @@ export function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     e.stopPropagation();
     if (!isAuthenticated) {
-      window.location.href = "/api/login";
+      setLocation("/login");
       return;
     }
     addToCartMutation.mutate();
@@ -75,7 +76,7 @@ export function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     e.stopPropagation();
     if (!isAuthenticated) {
-      window.location.href = "/api/login";
+      setLocation("/login");
       return;
     }
     addToWishlistMutation.mutate();
@@ -163,7 +164,19 @@ export function ProductCard({ product }: ProductCardProps) {
         <CardContent className="p-4 space-y-3">
           {/* Certifications */}
           {product.certifications && product.certifications.length > 0 && (
-            <CertificationBadges certifications={product.certifications} max={4} />
+            <div className="flex flex-wrap gap-1">
+              {product.certifications.slice(0, 3).map((cert) => (
+                <CertificationBadge
+                  key={cert.id}
+                  certificationBody={cert.certificationBody}
+                  sellerCertification={cert as any}
+                  size="sm"
+                />
+              ))}
+              {product.certifications.length > 3 && (
+                <span className="text-xs text-muted-foreground self-center">+{product.certifications.length - 3}</span>
+              )}
+            </div>
           )}
 
           {/* Product Name */}
@@ -174,7 +187,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {/* Seller */}
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <span>by {product.seller?.sellerName || "Unknown Seller"}</span>
-            {product.seller?.sellerVerified && (
+            {product.seller?.verificationStatus === "verified" && (
               <svg className="h-3 w-3 text-primary" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -184,11 +197,11 @@ export function ProductCard({ product }: ProductCardProps) {
           {/* Price */}
           <div className="flex items-baseline gap-2">
             <span className="font-semibold text-lg" data-testid={`text-product-price-${product.id}`}>
-              ${price.toFixed(2)}
+              £{price.toFixed(2)}
             </span>
             {originalPrice && (
               <span className="text-sm text-muted-foreground line-through">
-                ${originalPrice.toFixed(2)}
+                £{originalPrice.toFixed(2)}
               </span>
             )}
           </div>

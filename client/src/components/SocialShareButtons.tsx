@@ -191,7 +191,7 @@ export function SocialShareButtons({
           {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
           {copied ? "Copied!" : "Copy"}
         </Button>
-        {typeof navigator !== "undefined" && navigator.share && (
+        {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
           <Button
             variant="outline"
             size="sm"

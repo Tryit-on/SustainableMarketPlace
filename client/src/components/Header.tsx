@@ -15,12 +15,13 @@ import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { CartItem, Category } from "@shared/schema";
 
 const navLinks = [
   { href: "/shop", label: "Shop" },
-  { href: "/sellers", label: "Sellers" },
-  { href: "/community", label: "Community" },
+  { href: "/replace", label: "Replace" },
+  { href: "/learn", label: "Learn" },
   { href: "/about", label: "About" },
 ];
 
@@ -29,6 +30,17 @@ export function Header() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  async function handleLogout() {
+    try {
+      await apiRequest("POST", "/api/logout");
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.clear();
+      setLocation("/");
+    } catch {
+      // logout best-effort
+    }
+  }
 
   const { data: cartItems = [] } = useQuery<CartItem[]>({
     queryKey: ["/api/cart"],
@@ -157,24 +169,46 @@ export function Header() {
                       Orders
                     </Link>
                   </DropdownMenuItem>
-                  {user?.isSeller && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/account/impact" className="cursor-pointer">
+                      My Impact
+                    </Link>
+                  </DropdownMenuItem>
+                  {(user as any)?.verificationStatus === "verified" ? (
                     <DropdownMenuItem asChild>
                       <Link href="/seller/dashboard" className="cursor-pointer" data-testid="link-seller-dashboard">
                         Seller Dashboard
                       </Link>
                     </DropdownMenuItem>
+                  ) : (user as any)?.verificationStatus === "pending" ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/seller/application" className="cursor-pointer">
+                        Application Status
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem asChild>
+                      <Link href="/seller/apply" className="cursor-pointer">
+                        Become a Seller
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {(user as any)?.isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="cursor-pointer">
+                        Admin Dashboard
+                      </Link>
+                    </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <a href="/api/logout" className="cursor-pointer" data-testid="link-logout">
-                      Log out
-                    </a>
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer" data-testid="link-logout">
+                    Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <Button asChild data-testid="button-login">
-                <a href="/api/login">Log in</a>
+                <Link href="/login">Log in</Link>
               </Button>
             )}
 
