@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useStripe, Elements, PaymentElement, useElements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
@@ -14,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Leaf, Lock } from "lucide-react";
+import { ArrowLeft, Leaf, Lock, Sprout } from "lucide-react";
 import type { CartItemWithProduct } from "@shared/schema";
 
 const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY
@@ -92,6 +93,8 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const [clientSecret, setClientSecret] = useState("");
   const [shippingOption, setShippingOption] = useState("standard");
+  const [offsetRequested, setOffsetRequested] = useState(false);
+  const [offsetAmount, setOffsetAmount] = useState(0);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -104,9 +107,22 @@ export default function Checkout() {
     enabled: isAuthenticated,
   });
 
+  // Check if carbon offset provider is enabled
+  const { data: offsetStatus } = useQuery<{ enabled: boolean; ratePerKg: number | null; provider: string }>({
+    queryKey: ["/api/carbon-offset/rate"],
+  });
+  const offsetEnabled = !!offsetStatus?.enabled;
+
   const subtotal = cartItems?.reduce((sum, item) => {
     return sum + parseFloat(item.product.price) * item.quantity;
   }, 0) || 0;
+
+  const shippingCarbonKg = shippingOption === "express" ? 1.6 : 0.8;
+
+  const productCarbonKg = cartItems?.reduce((sum, item) => {
+    return sum + parseFloat((item.product as any).carbonFootprint ?? "0") * item.quantity;
+  }, 0) ?? 0;
+  const totalCarbonKg = productCarbonKg + shippingCarbonKg;
 
   const shippingCosts = {
     standard: subtotal > 40 ? 0 : 4.99,
@@ -114,14 +130,19 @@ export default function Checkout() {
   };
 
   const shipping = shippingCosts[shippingOption as keyof typeof shippingCosts] ?? 4.99;
-  const total = subtotal + shipping;
+  const total = subtotal + shipping + (offsetRequested ? offsetAmount : 0);
 
   useEffect(() => {
     if (isAuthenticated && cartItems && cartItems.length > 0 && !clientSecret) {
-      apiRequest("POST", "/api/create-payment-intent", { amount: total })
+      apiRequest("POST", "/api/create-payment-intent", {
+        amount: subtotal + shipping,
+        offsetRequested,
+        carbonKg: totalCarbonKg,
+      })
         .then((res) => res.json())
         .then((data) => {
           setClientSecret(data.clientSecret);
+          if (data.offsetAmount) setOffsetAmount(data.offsetAmount);
         })
         .catch((error) => {
           console.error("Error creating payment intent:", error);
@@ -132,7 +153,13 @@ export default function Checkout() {
           });
         });
     }
-  }, [isAuthenticated, cartItems, total, clientSecret, toast]);
+  }, [isAuthenticated, cartItems, subtotal, shipping, clientSecret, toast]);
+
+  // Re-create payment intent when offset preference changes
+  const handleOffsetChange = (checked: boolean) => {
+    setOffsetRequested(checked);
+    setClientSecret(""); // force new payment intent
+  };
 
   const handlePaymentSuccess = () => {
     setLocation("/order-confirmation");
@@ -353,6 +380,15 @@ export default function Checkout() {
                         )}
                       </span>
                     </div>
+                    {offsetRequested && offsetAmount > 0 && (
+                      <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                        <span className="flex items-center gap-1">
+                          <Sprout className="h-3 w-3" />
+                          Carbon offset ({totalCarbonKg.toFixed(2)} kg CO₂e)
+                        </span>
+                        <span>£{offsetAmount.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <Separator />
@@ -362,18 +398,43 @@ export default function Checkout() {
                     <span>£{total.toFixed(2)}</span>
                   </div>
 
-                  {/* Honest sustainability note */}
-                  <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
-                    <CardContent className="p-4">
-                      <p className="text-sm font-medium flex items-center gap-2 mb-1">
-                        <Leaf className="h-4 w-4 text-emerald-600" />
-                        All sellers on GreenMart are verified
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Every product in your cart is from a seller we've reviewed. Carbon offset integration coming soon.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  {/* Carbon offset opt-in — only shown when provider is live */}
+                  {offsetEnabled ? (
+                    <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id="carbon-offset"
+                            checked={offsetRequested}
+                            onCheckedChange={(v) => handleOffsetChange(!!v)}
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <label htmlFor="carbon-offset" className="text-sm font-medium flex items-center gap-1 cursor-pointer">
+                              <Sprout className="h-4 w-4 text-emerald-600" />
+                              Offset this order's carbon footprint
+                            </label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Purchases verified carbon credits from {offsetStatus?.provider ?? "Gold Standard"} at the current market rate.
+                              {offsetAmount > 0 && ` Adds £${offsetAmount.toFixed(2)} to your order.`}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+                      <CardContent className="p-4">
+                        <p className="text-sm font-medium flex items-center gap-2 mb-1">
+                          <Leaf className="h-4 w-4 text-emerald-600" />
+                          All sellers on GreenMart are verified
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Every product in your cart is from a seller we've reviewed and verified.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </CardContent>
               </Card>
             </div>

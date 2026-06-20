@@ -5,6 +5,8 @@ import { setupAuth, isAuthenticated } from "./auth";
 import { computeSustainabilityScore } from "./scoring";
 import { sendEmail } from "./email";
 import { startCertificationExpiryJob } from "./jobs/certificationExpiry";
+import { calculateFee, getCommissionRate } from "./commission";
+import { isOffsetEnabled, purchaseOffset, getOffsetRate } from "./carbonOffset";
 import Stripe from "stripe";
 import { z } from "zod";
 import {
@@ -23,6 +25,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
   : null;
+
+// Pro subscription price ID — set STRIPE_PRO_PRICE_ID in env (create in Stripe dashboard: £29/month)
+const PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID ?? "";
 
 // ─── Middleware helpers ────────────────────────────────────────────────────────
 
@@ -51,6 +56,118 @@ async function requireVerifiedSeller(req: Request, res: Response): Promise<boole
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Stripe webhooks need raw body — register BEFORE express.json() middleware in setupAuth
+  app.post(
+    "/api/webhooks/stripe",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req: any, _res: any, next: any) => {
+      let data = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk: string) => { data += chunk; });
+      req.on("end", () => { req.rawBody = data; next(); });
+    },
+    async (req: Request, res: Response) => {
+      if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
+
+      const sig = req.headers["stripe-signature"];
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      let event: Stripe.Event;
+
+      try {
+        if (webhookSecret && sig) {
+          event = stripe.webhooks.constructEvent((req as any).rawBody, sig, webhookSecret);
+        } else {
+          // Dev fallback: trust the raw payload
+          event = JSON.parse((req as any).rawBody) as Stripe.Event;
+        }
+      } catch (err: any) {
+        return res.status(400).json({ message: `Webhook error: ${err.message}` });
+      }
+
+      try {
+        switch (event.type) {
+          case "payment_intent.succeeded": {
+            const pi = event.data.object as Stripe.PaymentIntent;
+            // Retrieve order linked to this payment intent
+            const orderList = await storage.getOrderByPaymentIntent(pi.id);
+            if (!orderList) break;
+
+            // Store charge ID for transfer source linkage
+            const chargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge?.id;
+            if (chargeId) {
+              await storage.updateOrder(orderList.id, { stripeChargeId: chargeId, status: "confirmed" } as any);
+            }
+
+            // Create per-seller transfers (net of commission)
+            const order = await storage.getOrder(orderList.id);
+            if (!order) break;
+
+            const sellerTotals = new Map<string, number>();
+            for (const item of order.items) {
+              const seller = await storage.getUser(item.product.sellerId);
+              if (!seller?.stripeAccountId || seller.stripeAccountStatus !== "active") continue;
+              const current = sellerTotals.get(seller.id) ?? 0;
+              sellerTotals.set(seller.id + "|" + seller.stripeAccountId, current + parseFloat(item.price) * item.quantity);
+            }
+
+            for (const [key, grossAmount] of Array.from(sellerTotals.entries())) {
+              const [, stripeAccountId] = key.split("|");
+              const seller = await storage.getUserByStripeAccount(stripeAccountId);
+              if (!seller) continue;
+              const { sellerPayout } = calculateFee(grossAmount, seller.subscriptionTier);
+              const transferAmountPence = Math.round(sellerPayout * 100);
+              if (transferAmountPence <= 0) continue;
+              try {
+                await stripe.transfers.create({
+                  amount: transferAmountPence,
+                  currency: "gbp",
+                  destination: stripeAccountId,
+                  ...(chargeId ? { source_transaction: chargeId } : {}),
+                  metadata: { orderId: order.id },
+                });
+              } catch (transferErr: any) {
+                console.error(`Transfer to ${stripeAccountId} failed:`, transferErr.message);
+              }
+            }
+            break;
+          }
+
+          case "account.updated": {
+            const account = event.data.object as Stripe.Account;
+            const status = account.charges_enabled ? "active" : "pending";
+            await storage.updateUserByStripeAccount(account.id, { stripeAccountStatus: status } as any);
+            break;
+          }
+
+          case "customer.subscription.updated": {
+            const sub = event.data.object as Stripe.Subscription;
+            const tier = sub.items.data[0]?.price.id === PRO_PRICE_ID ? "pro" : "starter";
+            await storage.updateUserByStripeCustomer(sub.customer as string, {
+              subscriptionTier: tier,
+              subscriptionStatus: sub.status,
+              stripeSubscriptionId: sub.id,
+            } as any);
+            break;
+          }
+
+          case "customer.subscription.deleted": {
+            const sub = event.data.object as Stripe.Subscription;
+            await storage.updateUserByStripeCustomer(sub.customer as string, {
+              subscriptionTier: "starter",
+              subscriptionStatus: "cancelled",
+              stripeSubscriptionId: null,
+            } as any);
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.error("Webhook handler error:", err.message);
+      }
+
+      res.json({ received: true });
+    }
+  );
+
   await setupAuth(app);
   startCertificationExpiryJob();
 
@@ -346,14 +463,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/create-payment-intent", isAuthenticated, async (req, res) => {
     try {
       if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
-      const { amount } = req.body;
+      const { amount, offsetRequested, carbonKg } = req.body;
       if (!amount || typeof amount !== "number") return res.status(400).json({ message: "Invalid amount" });
+
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+
+      // Calculate commission breakdown (informational — transfers happen post-payment via webhook)
+      const { platformFee, sellerPayout, commissionRate } = calculateFee(amount, user?.subscriptionTier);
+
+      // If offset requested and provider is enabled, get live rate
+      let offsetAmount = 0;
+      if (offsetRequested && isOffsetEnabled() && carbonKg && carbonKg > 0) {
+        const rate = await getOffsetRate();
+        offsetAmount = rate ? Math.round(rate * carbonKg * 100) / 100 : 0;
+      }
+
+      const totalAmount = amount + offsetAmount;
+
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100),
+        amount: Math.round(totalAmount * 100),
         currency: "gbp",
         automatic_payment_methods: { enabled: true },
+        metadata: {
+          buyerId: userId,
+          platformFee: platformFee.toFixed(2),
+          sellerPayout: sellerPayout.toFixed(2),
+          commissionRate: commissionRate.toFixed(4),
+          offsetRequested: offsetRequested ? "true" : "false",
+          offsetAmount: offsetAmount.toFixed(2),
+        },
       });
-      res.json({ clientSecret: paymentIntent.client_secret });
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+        platformFee,
+        sellerPayout,
+        commissionRate,
+        offsetAmount,
+        totalAmount,
+      });
     } catch {
       res.status(500).json({ message: "Error creating payment intent" });
     }
@@ -362,26 +511,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      const { shippingAddress, paymentIntentId, shippingCarbonKg = 0 } = req.body;
+      const { shippingAddress, paymentIntentId, shippingCarbonKg = 0, offsetRequested = false } = req.body;
       const cartItems = await storage.getCartItems(userId);
       if (cartItems.length === 0) return res.status(400).json({ message: "Cart is empty" });
 
-      const totalAmount = cartItems.reduce((sum, item) => sum + parseFloat(item.product.price) * item.quantity, 0);
+      const user = await storage.getUser(userId);
+      const subtotal = cartItems.reduce((sum, item) => sum + parseFloat(item.product.price) * item.quantity, 0);
 
-      // Calculate carbon from product data
-      const carbonKgTotal = cartItems.reduce((sum, item) => {
-        const productCarbon = parseFloat(item.product.carbonFootprint ?? "0");
-        return sum + productCarbon * item.quantity;
-      }, shippingCarbonKg);
+      // Commission is deducted from seller payout, not added to buyer total
+      const { platformFee, sellerPayout } = calculateFee(subtotal, user?.subscriptionTier);
+
+      // Carbon data
+      const productCarbonKg = cartItems.reduce((sum, item) => {
+        return sum + parseFloat(item.product.carbonFootprint ?? "0") * item.quantity;
+      }, 0);
+      const carbonKgTotal = productCarbonKg + shippingCarbonKg;
+
+      // Purchase carbon offset if requested and provider is live
+      let offsetResult = null;
+      if (offsetRequested && isOffsetEnabled() && carbonKgTotal > 0) {
+        try {
+          offsetResult = await purchaseOffset(carbonKgTotal);
+        } catch (err: any) {
+          console.error("Carbon offset purchase failed:", err.message);
+        }
+      }
 
       const order = await storage.createOrder({
         userId,
         status: "pending",
-        totalAmount: totalAmount.toFixed(2),
+        totalAmount: subtotal.toFixed(2),
         shippingAddress,
         paymentIntentId,
         carbonKgTotal: carbonKgTotal > 0 ? carbonKgTotal.toFixed(3) : null,
-      });
+        offsetRequested,
+        offsetConfirmationId: offsetResult?.confirmationId ?? null,
+        offsetProviderUrl: offsetResult?.providerUrl ?? null,
+        offsetAmountCharged: offsetResult ? offsetResult.amountCharged.toFixed(2) : null,
+        carbonOffsetProvider: offsetResult?.provider ?? null,
+        platformFeeAmount: platformFee.toFixed(2),
+        sellerPayoutAmount: sellerPayout.toFixed(2),
+      } as any);
 
       for (const cartItem of cartItems) {
         await storage.createOrderItem({
@@ -394,12 +564,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.clearCart(userId);
 
-      // Update buyer lifetime stats
-      const user = await storage.getUser(userId);
-      if (user) {
+      // Update buyer lifetime carbon stats
+      if (user && offsetResult) {
         await storage.updateUser(userId, {
-          lifetimeCarbonAvoidedKg: (
-            parseFloat(user.lifetimeCarbonAvoidedKg ?? "0") + (carbonKgTotal > 0 ? 0 : 0)
+          lifetimeCarbonOffsetKg: (
+            parseFloat(user.lifetimeCarbonOffsetKg ?? "0") + carbonKgTotal
           ).toFixed(3) as any,
         });
       }
@@ -605,6 +774,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/seller/certifications", isAuthenticated, async (req, res) => {
     try {
       res.json(await storage.getSellerCertifications(getUserId(req)));
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ── Seller: Stripe Connect (payouts) ──────────────────────────────────────
+
+  app.post("/api/seller/stripe/connect", isAuthenticated, async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
+      if (!(await requireVerifiedSeller(req, res))) return;
+
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      let accountId = user.stripeAccountId;
+
+      // Create Express connected account if not already created
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "GB",
+          email: user.email ?? undefined,
+          capabilities: { transfers: { requested: true } },
+          metadata: { userId },
+        });
+        accountId = account.id;
+        await storage.updateUser(userId, {
+          stripeAccountId: accountId,
+          stripeAccountStatus: "pending",
+        } as any);
+      }
+
+      // Generate onboarding link
+      const returnUrl = `${process.env.SITE_URL ?? "http://localhost:5000"}/seller/dashboard?tab=payouts`;
+      const refreshUrl = `${process.env.SITE_URL ?? "http://localhost:5000"}/seller/dashboard?tab=payouts&refresh=1`;
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        return_url: returnUrl,
+        refresh_url: refreshUrl,
+        type: "account_onboarding",
+      });
+
+      res.json({ onboardingUrl: accountLink.url, accountId });
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/seller/stripe/connect/status", isAuthenticated, async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      if (!user.stripeAccountId) {
+        return res.json({ connected: false, status: null });
+      }
+
+      // Refresh status from Stripe in case onboarding completed
+      const account = await stripe.accounts.retrieve(user.stripeAccountId);
+      const status = account.charges_enabled ? "active" : "pending";
+
+      if (status !== user.stripeAccountStatus) {
+        await storage.updateUser(userId, { stripeAccountStatus: status } as any);
+      }
+
+      res.json({
+        connected: true,
+        status,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        accountId: user.stripeAccountId,
+      });
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ── Seller: Subscription tiers ────────────────────────────────────────────
+
+  app.get("/api/seller/subscription", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const tier = user.subscriptionTier ?? "starter";
+      const commissionRate = getCommissionRate(tier);
+
+      res.json({
+        tier,
+        subscriptionStatus: user.subscriptionStatus ?? null,
+        stripeSubscriptionId: user.stripeSubscriptionId ?? null,
+        commissionRate,
+        commissionPct: Math.round(commissionRate * 100),
+      });
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/seller/subscribe/pro", isAuthenticated, async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
+      if (!PRO_PRICE_ID) return res.status(500).json({ message: "Pro subscription not configured (missing STRIPE_PRO_PRICE_ID)" });
+      if (!(await requireVerifiedSeller(req, res))) return;
+
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      if (user.subscriptionTier === "pro" && user.subscriptionStatus === "active") {
+        return res.status(400).json({ message: "Already on Pro plan" });
+      }
+
+      // Create or retrieve Stripe customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email ?? undefined,
+          metadata: { userId },
+        });
+        customerId = customer.id;
+        await storage.updateUser(userId, { stripeCustomerId: customerId } as any);
+      }
+
+      const returnUrl = `${process.env.SITE_URL ?? "http://localhost:5000"}/seller/dashboard?tab=payouts`;
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        mode: "subscription",
+        line_items: [{ price: PRO_PRICE_ID, quantity: 1 }],
+        success_url: `${returnUrl}&subscribed=1`,
+        cancel_url: `${returnUrl}&cancelled=1`,
+        metadata: { userId },
+      });
+
+      res.json({ checkoutUrl: session.url });
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/seller/subscribe/cancel", isAuthenticated, async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ message: "Stripe not configured" });
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      if (!user?.stripeSubscriptionId) {
+        return res.status(400).json({ message: "No active subscription" });
+      }
+      // Cancel at period end — seller keeps Pro until billing cycle ends
+      await stripe.subscriptions.update(user.stripeSubscriptionId, { cancel_at_period_end: true });
+      res.json({ message: "Subscription will cancel at the end of the current billing period" });
+    } catch {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ── Carbon offset: live rate ──────────────────────────────────────────────
+
+  app.get("/api/carbon-offset/rate", async (_req, res) => {
+    try {
+      if (!isOffsetEnabled()) {
+        return res.json({ enabled: false, ratePerKg: null });
+      }
+      const rate = await getOffsetRate();
+      res.json({ enabled: true, ratePerKg: rate, provider: process.env.CARBON_OFFSET_PROVIDER ?? "goldstandard" });
     } catch {
       res.status(500).json({ message: "Internal server error" });
     }

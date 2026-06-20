@@ -126,6 +126,7 @@ export interface IStorage {
   // Orders
   getOrders(userId: string): Promise<OrderWithItems[]>;
   getOrder(id: string): Promise<OrderWithItems | undefined>;
+  getOrderByPaymentIntent(paymentIntentId: string): Promise<Order | undefined>;
   getSellerOrders(sellerId: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrder(id: string, data: Partial<Order>): Promise<Order | undefined>;
@@ -154,6 +155,11 @@ export interface IStorage {
   // Seller public profile
   getSellerProfile(slug: string): Promise<PublicSellerProfile | undefined>;
   getSellerProfileById(id: string): Promise<PublicSellerProfile | undefined>;
+
+  // Stripe helpers
+  getUserByStripeAccount(stripeAccountId: string): Promise<User | undefined>;
+  updateUserByStripeAccount(stripeAccountId: string, data: Partial<User>): Promise<void>;
+  updateUserByStripeCustomer(customerId: string, data: Partial<User>): Promise<void>;
 }
 
 export interface ProductFilters {
@@ -681,6 +687,11 @@ export class DatabaseStorage implements IStorage {
     return this.enrichOrder(result[0]);
   }
 
+  async getOrderByPaymentIntent(paymentIntentId: string): Promise<Order | undefined> {
+    const result = await db.select().from(orders).where(eq(orders.paymentIntentId, paymentIntentId)).limit(1);
+    return result[0];
+  }
+
   async getSellerOrders(sellerId: string): Promise<Order[]> {
     const sellerProducts = await db.select({ id: products.id }).from(products).where(eq(products.sellerId, sellerId));
     const productIds = sellerProducts.map((p) => p.id);
@@ -828,6 +839,19 @@ export class DatabaseStorage implements IStorage {
     return this.buildSellerProfile(user[0]);
   }
 
+  async getUserByStripeAccount(stripeAccountId: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.stripeAccountId, stripeAccountId)).limit(1);
+    return result[0];
+  }
+
+  async updateUserByStripeAccount(stripeAccountId: string, data: Partial<User>): Promise<void> {
+    await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.stripeAccountId, stripeAccountId));
+  }
+
+  async updateUserByStripeCustomer(customerId: string, data: Partial<User>): Promise<void> {
+    await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.stripeCustomerId, customerId));
+  }
+
   private async buildSellerProfile(user: User): Promise<PublicSellerProfile> {
     const certs = await db
       .select()
@@ -861,6 +885,10 @@ export class DatabaseStorage implements IStorage {
       sellerFoundedYear: user.sellerFoundedYear,
       profileImageUrl: user.profileImageUrl,
       verificationStatus: user.verificationStatus,
+      stripeAccountId: user.stripeAccountId,
+      stripeAccountStatus: user.stripeAccountStatus,
+      subscriptionTier: user.subscriptionTier,
+      subscriptionStatus: user.subscriptionStatus,
       certifications: certsWithBodies,
       productCount: productCountResult[0]?.count ?? 0,
       averageScore: Math.round(avgScoreResult[0]?.avg ?? 0),

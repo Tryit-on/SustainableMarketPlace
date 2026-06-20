@@ -48,6 +48,14 @@ export const users = pgTable("users", {
   lifetimeCarbonOffsetKg: decimal("lifetime_carbon_offset_kg", { precision: 10, scale: 3 }).default("0"),
   lifetimeCarbonAvoidedKg: decimal("lifetime_carbon_avoided_kg", { precision: 10, scale: 3 }).default("0"),
   lifetimeCertifiedProducts: integer("lifetime_certified_products").default(0),
+  // Monetization: Stripe Connect (seller payouts)
+  stripeAccountId: varchar("stripe_account_id"),
+  stripeAccountStatus: varchar("stripe_account_status"), // null | pending | active | restricted
+  // Monetization: Subscription tiers
+  subscriptionTier: varchar("subscription_tier").default("starter"), // starter | pro
+  subscriptionStatus: varchar("subscription_status"), // null | active | cancelled | past_due
+  stripeCustomerId: varchar("stripe_customer_id"),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -215,6 +223,11 @@ export const orders = pgTable("orders", {
   offsetConfirmationId: varchar("offset_confirmation_id"),
   offsetProviderUrl: varchar("offset_provider_url"),
   offsetAmountCharged: decimal("offset_amount_charged", { precision: 10, scale: 2 }),
+  carbonOffsetProvider: varchar("carbon_offset_provider"),
+  // Monetization: commission tracking
+  platformFeeAmount: decimal("platform_fee_amount", { precision: 10, scale: 2 }),
+  sellerPayoutAmount: decimal("seller_payout_amount", { precision: 10, scale: 2 }),
+  stripeChargeId: varchar("stripe_charge_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -494,6 +507,10 @@ export type PublicSellerProfile = Pick<
   | "sellerFoundedYear"
   | "profileImageUrl"
   | "verificationStatus"
+  | "stripeAccountId"
+  | "stripeAccountStatus"
+  | "subscriptionTier"
+  | "subscriptionStatus"
 > & {
   certifications: (SellerCertification & { certificationBody: CertificationBody })[];
   productCount: number;
