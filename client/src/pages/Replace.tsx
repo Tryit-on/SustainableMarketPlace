@@ -29,7 +29,7 @@ export default function Replace() {
     const q = search.toLowerCase();
     return (
       g.conventionalItem.toLowerCase().includes(q) ||
-      g.zeroWasteAlternative.toLowerCase().includes(q) ||
+      g.headline.toLowerCase().includes(q) ||
       (g.seoDescription ?? "").toLowerCase().includes(q)
     );
   });
@@ -89,11 +89,11 @@ export default function Replace() {
                           <span className="line-through">{guide.conventionalItem}</span>
                           <ArrowRight className="h-3 w-3 flex-shrink-0" />
                         </div>
-                        <h3 className="font-semibold text-base leading-tight">{guide.zeroWasteAlternative}</h3>
+                        <h3 className="font-semibold text-base leading-tight">{guide.headline}</h3>
                       </div>
-                      {guide.category && (
-                        <Badge className={`${CATEGORY_COLORS[guide.category] ?? "bg-muted text-muted-foreground"} border-0 text-xs ml-2 flex-shrink-0`}>
-                          {guide.category.replace(/_/g, " ")}
+                      {guide.categorySlug && (
+                        <Badge className={`${CATEGORY_COLORS[guide.categorySlug] ?? "bg-muted text-muted-foreground"} border-0 text-xs ml-2 flex-shrink-0`}>
+                          {guide.categorySlug.replace(/-/g, " ")}
                         </Badge>
                       )}
                     </div>

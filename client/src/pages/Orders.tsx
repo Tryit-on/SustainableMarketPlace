@@ -144,8 +144,8 @@ export default function Orders() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Leaf className="h-4 w-4 text-primary" />
                         <span>
-                          {order.carbonSaved
-                            ? `${order.carbonSaved}kg CO2 saved`
+                          {order.carbonKgTotal
+                            ? `${parseFloat(order.carbonKgTotal).toFixed(1)}kg CO2 total`
                             : "Carbon-neutral shipping"}
                         </span>
                       </div>

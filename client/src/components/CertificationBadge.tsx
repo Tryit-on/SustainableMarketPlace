@@ -20,8 +20,8 @@ export function CertificationBadge({
     sellerCertification.validUntil != null &&
     new Date(sellerCertification.validUntil as any) < new Date();
 
-  const verifiedDate = sellerCertification.verifiedAt
-    ? new Date(sellerCertification.verifiedAt as any).toLocaleDateString("en-GB", {
+  const verifiedDate = sellerCertification.createdAt
+    ? new Date(sellerCertification.createdAt as any).toLocaleDateString("en-GB", {
         day: "numeric", month: "short", year: "numeric",
       })
     : null;

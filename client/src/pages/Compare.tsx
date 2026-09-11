@@ -255,9 +255,9 @@ export default function Compare() {
                   <RowLabel label="Rating" />
                   {cols.map((p) => (
                     <Cell key={p.id}>
-                      {p.rating && parseFloat(p.rating) > 0 ? (
+                      {p.averageRating && p.averageRating > 0 ? (
                         <div>
-                          <span className="font-semibold">{parseFloat(p.rating).toFixed(1)}</span>
+                          <span className="font-semibold">{p.averageRating.toFixed(1)}</span>
                           <span className="text-muted-foreground text-xs"> / 5</span>
                           {p.reviewCount ? (
                             <div className="text-xs text-muted-foreground">({p.reviewCount} reviews)</div>

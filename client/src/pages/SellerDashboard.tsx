@@ -219,7 +219,7 @@ export default function SellerDashboard() {
                             <TableCell>
                               <div className="flex items-center gap-1">
                                 <Leaf className="h-4 w-4 text-primary" />
-                                <span>{product.sustainabilityScore || 0}</span>
+                                <span>{product.computedSustainabilityScore || 0}</span>
                               </div>
                             </TableCell>
                             <TableCell className="text-right">

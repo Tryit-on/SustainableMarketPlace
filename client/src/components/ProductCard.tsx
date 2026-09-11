@@ -113,7 +113,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
           {/* Sustainability Score Badge */}
           <div className="absolute top-2 left-2">
-            <SustainabilityScore score={product.sustainabilityScore || 0} size="sm" />
+            <SustainabilityScore score={product.computedSustainabilityScore || 0} size="sm" />
           </div>
 
           {/* Discount Badge */}

@@ -102,11 +102,9 @@ export default function ReplacementGuide() {
           <div className="flex items-center gap-3 mb-4 text-white/60">
             <span className="text-sm line-through">{guide.conventionalItem}</span>
             <ArrowRight className="h-4 w-4" />
-            <span className="text-sm text-white">{guide.zeroWasteAlternative}</span>
+            <span className="text-sm text-white">{guide.headline}</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">
-            Replace {guide.conventionalItem} with {guide.zeroWasteAlternative}
-          </h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-3">{guide.headline}</h1>
           {guide.seoDescription && (
             <p className="text-white/80 text-lg max-w-2xl">{guide.seoDescription}</p>
           )}
@@ -143,7 +141,7 @@ export default function ReplacementGuide() {
         {/* How to use (if we have steps) */}
         {howToSteps && (
           <section>
-            <h2 className="text-xl font-semibold mb-4">How to use {guide.zeroWasteAlternative}</h2>
+            <h2 className="text-xl font-semibold mb-4">How to use {guide.headline}</h2>
             <ol className="space-y-3">
               {howToSteps.map((step, i) => (
                 <li key={i} className="flex gap-3">
@@ -178,7 +176,7 @@ export default function ReplacementGuide() {
         {/* Product recommendations */}
         {products && products.length > 0 && (
           <section>
-            <h2 className="text-xl font-semibold mb-4">Verified {guide.zeroWasteAlternative} options</h2>
+            <h2 className="text-xl font-semibold mb-4">Verified {guide.headline} options</h2>
             <div className="grid sm:grid-cols-2 gap-4">
               {products.map((product) => {
                 const score = product.computedSustainabilityScore ?? 0;
@@ -216,8 +214,8 @@ export default function ReplacementGuide() {
             </div>
             <div className="mt-4 text-center">
               <Button asChild variant="outline">
-                <Link href={`/shop?search=${encodeURIComponent(guide.zeroWasteAlternative)}`}>
-                  See all {guide.zeroWasteAlternative} products
+                <Link href={`/shop?search=${encodeURIComponent(guide.headline)}`}>
+                  See all {guide.headline} products
                 </Link>
               </Button>
             </div>
@@ -226,13 +224,13 @@ export default function ReplacementGuide() {
 
         {!products?.length && (
           <section>
-            <h2 className="text-xl font-semibold mb-4">Shop {guide.zeroWasteAlternative}</h2>
+            <h2 className="text-xl font-semibold mb-4">Shop {guide.headline}</h2>
             <Card className="border-dashed">
               <CardContent className="p-8 text-center">
                 <Leaf className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-muted-foreground mb-4">No verified products listed yet for this swap.</p>
                 <Button asChild variant="outline">
-                  <Link href={`/shop?search=${encodeURIComponent(guide.zeroWasteAlternative)}`}>
+                  <Link href={`/shop?search=${encodeURIComponent(guide.headline)}`}>
                     Search the shop
                   </Link>
                 </Button>

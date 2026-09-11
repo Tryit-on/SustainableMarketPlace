@@ -105,7 +105,7 @@ export function SellerVerificationCard({ user }: SellerVerificationCardProps) {
     applyMutation.mutate(data);
   };
 
-  if (user.sellerVerified) {
+  if (user.verificationStatus === "verified") {
     return (
       <Card className="bg-primary/5 border-primary/20">
         <CardHeader className="pb-3">

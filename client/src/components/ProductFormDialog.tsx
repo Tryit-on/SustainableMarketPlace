@@ -34,7 +34,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Loader2, Leaf } from "lucide-react";
-import type { Category, Certification, Product } from "@shared/schema";
+import type { Category, CertificationBody, Product } from "@shared/schema";
 
 const productFormSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
@@ -75,8 +75,8 @@ export function ProductFormDialog({ product, trigger, onSuccess }: ProductFormDi
     queryKey: ["/api/categories"],
   });
 
-  const { data: certifications = [] } = useQuery<Certification[]>({
-    queryKey: ["/api/certifications"],
+  const { data: certifications = [] } = useQuery<CertificationBody[]>({
+    queryKey: ["/api/certification-bodies"],
   });
 
   const form = useForm<ProductFormValues>({
@@ -88,7 +88,7 @@ export function ProductFormDialog({ product, trigger, onSuccess }: ProductFormDi
       price: product?.price || "",
       originalPrice: product?.originalPrice || "",
       imageUrl: product?.imageUrl || "",
-      sustainabilityScore: product?.sustainabilityScore?.toString() || "70",
+      sustainabilityScore: product?.computedSustainabilityScore?.toString() || "70",
       materials: product?.materials || "",
       carbonFootprint: product?.carbonFootprint || "",
       lifecycle: product?.lifecycle || "",

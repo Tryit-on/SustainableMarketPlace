@@ -387,13 +387,16 @@ export class DatabaseStorage implements IStorage {
 
   // Products
   async getProducts(filters: ProductFilters = {}): Promise<ProductWithDetails[]> {
-    let query = db.select().from(products).where(eq(products.isPublished, true));
-
+    const conditions = [eq(products.isPublished, true)];
     if (filters.inStockOnly !== false) {
-      query = query.where(and(eq(products.isPublished, true), eq(products.inStock, true)));
+      conditions.push(eq(products.inStock, true));
     }
 
-    let productList = await query.orderBy(desc(products.createdAt));
+    let productList = await db
+      .select()
+      .from(products)
+      .where(and(...conditions))
+      .orderBy(desc(products.createdAt));
 
     // Apply JS-level filters for complex joins (category slug, cert bodies)
     if (filters.categorySlug) {
